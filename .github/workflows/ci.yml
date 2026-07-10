@@ -187,27 +187,18 @@ jobs:
           retention-days: 7
 
   submit:
-    if: false
     name: Send Certificate
     runs-on: ubuntu-latest
     needs: [extract-student-info, verify, verify-authorship]
     steps:
-      - name: Submit student details to API
-        continue-on-error: true
+      - name: Prepare payload
+        id: prepare
         env:
           FIRST_NAME: ${{ needs.extract-student-info.outputs.first_name }}
           LAST_NAME: ${{ needs.extract-student-info.outputs.last_name }}
           PROGRAM: ${{ needs.extract-student-info.outputs.program }}
           STUDENT_EMAIL: ${{ needs.extract-student-info.outputs.student_email }}
-          SUBMISSION_API_URL: https://b854d624-9ddd-45bf-b9c9-e1e0a5f81e64.riomar.dev/api/certificates
-          SUBMISSION_API_TOKEN: 9NNM6xnZYdTmBZs37qwFLh9OqLOa2Jal
         run: |
-          echo "All checks passed. Ready to submit the following details:"
-          echo "  First Name : $FIRST_NAME"
-          echo "  Last Name  : $LAST_NAME"
-          echo "  Program    : $PROGRAM"
-          echo "  Email      : $STUDENT_EMAIL"
-
           PAYLOAD=$(jq -n \
             --arg first_name  "$FIRST_NAME" \
             --arg last_name   "$LAST_NAME" \
@@ -215,21 +206,46 @@ jobs:
             --arg email       "$STUDENT_EMAIL" \
             '{first_name: $first_name, last_name: $last_name, program: $program, umindanao_email: $email}')
 
-          echo "Request body:"
-          echo "$PAYLOAD"
+          echo "$PAYLOAD" > submission-payload.json
+          echo "payload=submission-payload.json" >> $GITHUB_OUTPUT
 
-          HTTP_STATUS=$(curl --silent --show-error \
-            -o response.txt -w "%{http_code}" \
-            -X POST "$SUBMISSION_API_URL" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $SUBMISSION_API_TOKEN" \
-            -d "$PAYLOAD")
+      - name: Try submit with retries
+        env:
+          SUBMISSION_API_URL: https://b854d624-9ddd-45bf-b9c9-e1e0a5f81e64.riomar.dev/api/certificates
+          SUBMISSION_API_TOKEN: 9NNM6xnZYdTmBZs37qwFLh9OqLOa2Jal
+        run: |
+          set -e
+          echo "Attempting to submit payload to submission API (3 attempts)"
+          ATTEMPT=0
+          MAX=3
+          HTTP_STATUS=0
 
-          echo "HTTP status: $HTTP_STATUS"
-          echo "Response body:"
-          cat response.txt
+          while [ $ATTEMPT -lt $MAX ]; do
+            ATTEMPT=$((ATTEMPT+1))
+            echo "Attempt $ATTEMPT/$MAX..."
+            HTTP_STATUS=$(curl --silent --show-error -o response.txt -w "%{http_code}" \
+              -X POST "$SUBMISSION_API_URL" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $SUBMISSION_API_TOKEN" \
+              -d @submission-payload.json || true)
 
-          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
-            echo "ERROR: submission API returned $HTTP_STATUS"
-            exit 1
-          fi
+            echo "HTTP status: $HTTP_STATUS"
+            cat response.txt || true
+
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+              echo "Submission succeeded"
+              exit 0
+            fi
+
+            echo "Submission failed (status $HTTP_STATUS). Retrying in 5s..."
+            sleep 5
+          done
+
+          echo "All attempts failed. Will upload the payload as an artifact for manual processing."
+
+      - name: Upload submission payload (for manual processing)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: submission-payload-${{ github.event.pull_request.number }}
+          path: submission-payload.json
