@@ -187,16 +187,11 @@ jobs:
           retention-days: 7
 
   submit:
-    if: false
     name: Send Certificate
     runs-on: ubuntu-latest
-    # Remove verify-authorship from the dependency list so submission proceeds
-    # even if commit authorship verification fails (allows certificates to be
-    # issued when external account linking causes false negatives).
-    needs: [extract-student-info, verify]
+    needs: [extract-student-info, verify, verify-authorship]
     steps:
       - name: Submit student details to API
-        continue-on-error: true
         env:
           FIRST_NAME: ${{ needs.extract-student-info.outputs.first_name }}
           LAST_NAME: ${{ needs.extract-student-info.outputs.last_name }}
