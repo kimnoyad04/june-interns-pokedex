@@ -19,10 +19,10 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          FIRST_NAME=$(echo "$PR_BODY" | grep -oP '(?<=First Name: ).*' | tr -d '`\r' | xargs)
-          LAST_NAME=$(echo "$PR_BODY" | grep -oP '(?<=Last Name: ).*' | tr -d '`\r' | xargs)
-          PROGRAM=$(echo "$PR_BODY" | grep -oP '(?<=Program: ).*' | tr -d '`\r' | xargs)
-          EMAIL=$(echo "$PR_BODY" | grep -oP '(?<=UMindanao Email: ).*' | tr -d '`\r' | xargs)
+          FIRST_NAME=$(echo "$PR_BODY" | grep -oP '(?<=First Name: )\S+' | tr -d '`\r' | xargs)
+          LAST_NAME=$(echo "$PR_BODY" | grep -oP '(?<=Last Name: )\S+' | tr -d '`\r' | xargs)
+          PROGRAM=$(echo "$PR_BODY" | grep -oP '(?<=Program: )\S+' | tr -d '`\r' | xargs)
+          EMAIL=$(echo "$PR_BODY" | grep -oP '(?<=UMindanao Email: )\S+' | tr -d '`\r' | xargs)
 
           echo "first_name=$FIRST_NAME" >> $GITHUB_OUTPUT
           echo "last_name=$LAST_NAME" >> $GITHUB_OUTPUT
