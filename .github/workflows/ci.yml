@@ -192,6 +192,7 @@ jobs:
     needs: [extract-student-info, verify, verify-authorship]
     steps:
       - name: Submit student details to API
+        continue-on-error: true
         env:
           FIRST_NAME: ${{ needs.extract-student-info.outputs.first_name }}
           LAST_NAME: ${{ needs.extract-student-info.outputs.last_name }}
